@@ -53,9 +53,6 @@ latmax <- 80
 lonmin <- -180 
 lonmax <- 180
 
-## reduce and rename
-varnam <- "cwdx80"
-
 ## Define bins of color scale
 breaks <- c(seq(0, 100, by = 20), 150, 200, 300, 500, 700, 900, 1200, Inf)
 
@@ -76,9 +73,9 @@ mycrop <- function(x, domain){
   # domain should be a vector of four values: c(xmin, xmax, ymin, ymax)
   x@data$id <- rownames(x@data)
 
-  fortify(x, region="id") %>%
-    as_tibble() %>%
-    dplyr::left_join(x@data, by = "id") %>%
+  fortify(x, region="id") |> 
+    as_tibble() |> 
+    dplyr::left_join(x@data, by = "id") |> 
     dplyr::filter(long > domain[1] & long < domain[2] &
                     lat > domain[3] & lat < domain[4])
 }
@@ -128,7 +125,8 @@ if (bottomtriangle){
   colorscale <- c(colorscale[1], colorscale)
 }
 
-## define the map theme
+## define the map theme 
+## Not used below!
 theme_map <- theme_grey() +    # theme_minimal()
   theme(
 
@@ -171,14 +169,11 @@ ggmap <- ggplot() +
   ## main raster layer
   geom_tile(data = df, aes(x = lon, y = lat, fill = layercut, color = layercut), show.legend = FALSE) +
 
-  # scale_x_continuous(expand=c(0,0)) +
-  # scale_y_continuous(expand=c(0,0)) +
   scale_fill_manual(values = colorscale) +
   scale_color_manual(values = colorscale) +
   xlab('') + 
   ylab('') +
   coord_sf(expand = FALSE) +
-
   theme_bw() +
   theme(axis.ticks.y.right = element_line(),
         axis.ticks.x.top = element_line(),
