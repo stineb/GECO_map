@@ -12,6 +12,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(rgdal)  # for readOGR
+library(rnaturalearth) # for coastline data
 
 ## function for creating the color key
 source("../R/plot_discrete_cbar.R")
@@ -60,32 +61,16 @@ breaks <- c(seq(0, 100, by = 20), 150, 200, 300, 500, 700, 900, 1200, Inf)
 domain <- c(lonmin, lonmax, latmin, latmax)
 
 ## read 110 m resolution coastline from NaturalEarth data (is a shapefile)
-layer_coast <- readOGR(paste0("../data/ne_110m_coastline/ne_110m_coastline.shp"), 
-                       paste0("ne_110m_coastline"))
+layer_coast <- ne_coastline(scale = 110, returnclass = "sf")
 
 ## resize data frame to limit data volume (geographic clipping is done separately)
 df <- df |> 
   dplyr::filter(lon > domain[1] & lon < domain[2] & lat > domain[3] & lat < domain[4])
-
-## crop coastline data to domain
-mycrop <- function(x, domain){
-
-  # domain should be a vector of four values: c(xmin, xmax, ymin, ymax)
-  x@data$id <- rownames(x@data)
-
-  fortify(x, region="id") |> 
-    as_tibble() |> 
-    dplyr::left_join(x@data, by = "id") |> 
-    dplyr::filter(long > domain[1] & long < domain[2] &
-                    lat > domain[3] & lat < domain[4])
-}
-coast_crop <- mycrop(layer_coast, domain)
     
 nbin <- length(breaks) - 1
 breaks_with <- breaks
 
 ## Indicate that color scale extends to minus or plus infinity by a triangle
-## instead of the top or bottom box of the color key.
 toptriangle <- FALSE
 bottomtriangle <- FALSE
 if (is.infinite(breaks[length(breaks)])){
@@ -112,12 +97,12 @@ df <- df |>
 df$layercut <- as.factor(base::cut(df$cwdx80, breaks = breaks, labels = FALSE, include.lowest = TRUE))
 
 ## Define colors
-colorscale <- viridis::cividis(nbin, direction = 1)
+# colorscale <- viridis::cividis(nbin, direction = -1)
 
 ## or alternatively
-# colorscale <- scico::scico(nbin, palette = "batlowK", direction = 1)
+colorscale <- scico::scico(nbin, palette = "batlowK", direction = -1)
 
-## Defiine color of the top and bottom triangle if required
+## Define color of the top and bottom triangle if required
 if (toptriangle){
   colorscale <- c(colorscale, colorscale[length(colorscale)])
 }
@@ -146,42 +131,33 @@ theme_map <- theme_grey() +    # theme_minimal()
     # plot.margin = unit( c(0, 0, 0, 5) , "mm")
   )
 
-## create axis tick labels
-lat_breaks <- seq(-90, 90, by = 30)
-lon_breaks <- seq(-180, 180, by = 60)
-
-lat_labels <- sapply( 
-  lat_breaks, 
-  function(x) if (x>0) {parse(text = paste0(x, "*degree ~ N"))} 
-              else if (x==0) {parse(text = paste0(x, "*degree"))} 
-              else {parse(text = paste0(-x, "*degree ~ S"))} 
-  )
-lon_labels <- sapply( 
-  lon_breaks, 
-  function(x) if (x>0) {parse(text = paste0(x, "*degree ~ E"))} 
-              else if (x==0) {parse(text = paste0(x, "*degree"))} 
-              else {parse(text = paste0(-x, "*degree ~ W"))} 
-  )
-
 ## Create ggplot object
 ggmap <- ggplot() +
 
   ## main raster layer
-  geom_tile(data = df, aes(x = lon, y = lat, fill = layercut, color = layercut), show.legend = FALSE) +
+  ## Note: geom_raster() is a fast special case of geom_tile() used when all the tiles are the same size.
+  geom_raster(data = df, aes(x = lon, y = lat, fill = layercut, color = layercut), show.legend = FALSE) +
 
   scale_fill_manual(values = colorscale) +
   scale_color_manual(values = colorscale) +
   xlab('') + 
   ylab('') +
-  coord_sf(expand = FALSE) +
   theme_bw() +
   theme(axis.ticks.y.right = element_line(),
         axis.ticks.x.top = element_line(),
         panel.grid = element_blank()) +
   
   ## add coastline
-	geom_path(data = coast_crop, aes(x = long, y = lat, group = group), color = 'gray25', size = 0.1) +
-  
+  geom_sf(data = layer_coast,
+          color = "gray25",
+          fill = NA,
+          size = 0.1) +
+
+  coord_sf(xlim = c(lonmin, lonmax),
+           ylim = c(latmin, latmax),
+           expand = FALSE   # to draw map strictly bounded by the specified extent
+           ) +
+
   ## add a title to the map
   labs(title = expression(paste(italic("S")[CWDX80])))
 
@@ -204,6 +180,5 @@ cowplot::plot_grid(ggmap, gglegend, ncol = 2, rel_widths = c(1, 0.15))
 
 **Issues**
 
-- longitude and latitude tick labels don't show the degrees sign
-- would be nice to clip by coasline and give the ocean a different color
+- would be nice to clip by coastline and give the ocean a different color
 - demo in a separate section how to change projection to Robin
