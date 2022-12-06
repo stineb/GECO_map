@@ -322,7 +322,26 @@ gglegend <- plot_discrete_cbar(
 cowplot::plot_grid(ggmap, gglegend, ncol = 2, rel_widths = c(1, 0.15))
 ```
 
-The above workflow is now adopted as `plot_map4()` in the rbeni package.
+The above workflow is now adopted as `plot_map4()` in the rbeni package (as is `nc_to_df` which reads a NetCDF file into a data frame).
+```{r}
+library(rbeni)
+
+df <- nc_to_df("../data/cwdx80_halfdeg.nc", varnam = "cwdx80") |> 
+  mutate(lon = round(lon, digits = 2), lat = round(lat, digits = 2))
+
+plot_map4(df,
+          varnam = "cwdx80", 
+          lonmin = -180, lonmax = 180, latmin = -60, latmax = 80, 
+          breaks = c(seq(0, 100, by = 20), 150, 200, 300, 500, 700, 900, 1200, Inf), 
+          spacing = "constant", 
+          colorscale = "batlowK",
+          combine = TRUE, legend_title = "(mm)",
+          expand_size_y = 0.4,
+          hillshade = FALSE, rivers = FALSE, lakes = FALSE, ocean = TRUE,
+          scale = "low"
+          )
+```
+
 
 ### Different projection
 
