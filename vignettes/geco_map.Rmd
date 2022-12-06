@@ -134,10 +134,10 @@ ggmap <- ggplot() +
   scale_fill_manual(values = colorscale) +
   scale_color_manual(values = colorscale) +
 
-  ## add ocean
-  geom_sf(data = ocean,
-          color = NA,
-          fill = "grey25") +
+  # ## add ocean
+  # geom_sf(data = ocean,
+  #         color = NA,
+  #         fill = "lightblue") +
   
   ## add coastline
   geom_sf(data = coast,
@@ -338,7 +338,7 @@ plot_map4(df,
           combine = TRUE, legend_title = "(mm)",
           expand_size_y = 0.4,
           hillshade = FALSE, rivers = FALSE, lakes = FALSE, ocean = TRUE,
-          scale = "low"
+          scale = 110
           )
 ```
 
@@ -385,15 +385,12 @@ bb <- st_union(st_make_grid(
   n = 100))
 bb_robinson <- st_transform(bb, as.character(robinson))
 
-# transform the coastline to robinson
-coast <- st_transform(coast, robinson)
-
-## crop to extent
-coast <- st_crop(
-  coast, c(xmin = lonmin,
-            xmax = lonmax,
-            ymax = latmax,
-            ymin = latmin))
+# clip countries to bounding box
+# and transform
+coast <- coast %>%
+  st_buffer(0) %>%
+  st_intersection(st_union(bb)) %>%
+  st_transform(robinson)
 
 # re-project and convert gridded raster dato dataframe
 df <- projectRaster(rasta, crs = robinson) |> 
@@ -453,17 +450,17 @@ if (bottomtriangle){
 
 ## Create ggplot object
 ggmap <- ggplot()+
-  
-  geom_raster(
-    data = df,
-    aes(
-      x = x,
-      y = y,
-      fill = layercut
-    ),
-    interpolate = TRUE,
-    show.legend = FALSE
-    ) +
+  # 
+  # geom_raster(
+  #   data = df,
+  #   aes(
+  #     x = x,
+  #     y = y,
+  #     fill = layercut
+  #   ),
+  #   interpolate = TRUE,
+  #   show.legend = FALSE
+  #   ) +
 
   scale_fill_manual(values = colorscale) +
   scale_color_manual(values = colorscale) +
@@ -482,7 +479,7 @@ ggmap <- ggplot()+
           fill = NA,
           size = 0.1) +
   
-  coord_sf(crs = st_crs("+proj=robin")) +
+  #coord_sf(crs = st_crs("+proj=robin")) +
   
   # # This uses instructions from https://datascience.blog.wzb.eu/2019/04/30/zooming-in-on-maps-with-sf-and-ggplot2/
   # coord_sf(xlim = disp_win_coord[,'X'], 
