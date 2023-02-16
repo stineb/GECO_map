@@ -322,46 +322,26 @@ gglegend <- plot_discrete_cbar(
 cowplot::plot_grid(ggmap, gglegend, ncol = 2, rel_widths = c(1, 0.15))
 ```
 
-The above workflow is now adopted as `plot_map4()` in the rbeni package (as is `nc_to_df` which reads a NetCDF file into a data frame).
-```{r}
-library(rbeni)
-
-df <- nc_to_df("../data/cwdx80_halfdeg.nc", varnam = "cwdx80") |> 
-  mutate(lon = round(lon, digits = 2), lat = round(lat, digits = 2))
-
-plot_map4(df,
-          varnam = "cwdx80", 
-          lonmin = -180, lonmax = 180, latmin = -60, latmax = 80, 
-          breaks = c(seq(0, 100, by = 20), 150, 200, 300, 500, 700, 900, 1200, Inf), 
-          spacing = "constant", 
-          colorscale = "batlowK",
-          combine = TRUE, legend_title = "(mm)",
-          expand_size_y = 0.4,
-          hillshade = FALSE, rivers = FALSE, lakes = FALSE, ocean = TRUE,
-          scale = 110
-          )
-```
-
 
 ### Different projection
 
-This follows the example from Koen Hufken's [blog post](https://bluegreenlabs.org/post/map-building-3/).
+This follows the example from Koen Hufken's [blog post](https://bluegreenlabs.org/post/map-building-3/). Doesn't run currently.
 
-```{r}
-library(raster)
+```{r eval=FALSE}
 library(sf)
+library(terra)
 
 ## Reduce extent of map in latitude
 latmin <- -60
-latmax <- 90
-lonmin <- -180 
-lonmax <- 180
+latmax <- 85
+lonmin <- -179.999 
+lonmax <- 179.999
 
 ## Define bins of color scale
 breaks <- c(seq(0, 100, by = 20), 150, 200, 300, 500, 700, 900, 1200, Inf)
 
 ## Read NetCDF data as a raster object
-rasta <- raster("../data/cwdx80_halfdeg.nc")
+rasta <- terra::rast("../data/cwdx80_halfdeg.nc")
 
 ## Define projection object
 target_crs <- "+proj=robin +over"
@@ -371,7 +351,8 @@ robinson <- CRS(target_crs)
 domain <- c(lonmin, lonmax, latmin, latmax)
 
 ## read 110 m resolution coastline from NaturalEarth data (is a shapefile)
-coast <- ne_coastline(scale = 110, returnclass = "sf")
+coast <- ne_coastline(scale = 110, returnclass = "sf") |> 
+  dplyr::select(featurecla)
 
 # create a bounding box for the robinson projection
 # we'll use this as "trim" to remove jagged edges at
@@ -381,22 +362,23 @@ bb <- st_union(st_make_grid(
   st_bbox(c(xmin = lonmin,
             xmax = lonmax,
             ymax = latmax,
-            ymin = latmin), crs = st_crs(4326)),
-  n = 100))
+            ymin = latmin), 
+          crs = st_crs("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")),
+  n = 100)) |> 
+  st_union()
+
 bb_robinson <- st_transform(bb, as.character(robinson))
 
 # clip countries to bounding box
 # and transform
-coast <- coast %>%
-  st_buffer(0) %>%
-  st_intersection(st_union(bb)) %>%
-  st_transform(robinson)
+coast <- coast |>
+  st_transform(robinson) |>
+  st_intersection(bb_robinson)
 
-# re-project and convert gridded raster dato dataframe
-df <- projectRaster(rasta, crs = robinson) |> 
-  rasterToPoints() |> 
-  as_tibble()  |> 
-  `colnames<-`(c("x", "y", "cwdx80"))
+# convert gridded raster data dataframe
+g_df <- project(rasta, bb_robinson) |>
+  terra::crop(bb_robinson) |>
+  as.data.frame(xy = TRUE)
 
 nbin <- length(breaks) - 1
 breaks_with <- breaks
@@ -450,33 +432,33 @@ if (bottomtriangle){
 
 ## Create ggplot object
 ggmap <- ggplot()+
-  # 
-  # geom_raster(
-  #   data = df,
-  #   aes(
-  #     x = x,
-  #     y = y,
-  #     fill = layercut
-  #   ),
-  #   interpolate = TRUE,
-  #   show.legend = FALSE
-  #   ) +
+
+  geom_raster(
+    data = df,
+    aes(
+      x = x,
+      y = y,
+      fill = layercut
+    ),
+    interpolate = TRUE,
+    show.legend = FALSE
+    ) +
 
   scale_fill_manual(values = colorscale) +
   scale_color_manual(values = colorscale) +
-  
-  ## coast
-  geom_sf(data = coast,
-          colour='grey25',
-          linetype='solid',
-          fill= NA,
-          size = 0.1) +
   
   ## bounding box
   geom_sf(data = bb_robinson,
           colour='black',
           linetype='solid',
           fill = NA,
+          size = 0.1) +
+  
+  ## coast
+  geom_sf(data = coast,
+          colour='grey25',
+          linetype='solid',
+          fill= NA,
           size = 0.1) +
   
   #coord_sf(crs = st_crs("+proj=robin")) +
@@ -521,8 +503,24 @@ cowplot::plot_grid(ggmap, gglegend, ncol = 2, rel_widths = c(1, 0.15))
 ```
 
 
-**Issues**
+## Using rbeni
 
-- coastline is not showing.
-- Plotting outside the panel 
+The function `plot_map4()` from the [{rbeni}](https://github.com/stineb/rbeni) package implements the steps of plotting a map described above. It has some added flexibility in terms of the type of object to be plotted as a map.
+```{r}
+# first read NetCDF into a data frame
+df <- rbeni::nc_to_df("../data/cwdx80_halfdeg.nc", varnam = "cwdx80") |> 
+  mutate(lon = round(lon, digits = 2), lat = round(lat, digits = 2))
 
+# pass the data frame for plotting
+rbeni::plot_map4(df,
+          varnam = "cwdx80", 
+          lonmin = -180, lonmax = 180, latmin = -60, latmax = 80, 
+          breaks = c(seq(0, 100, by = 20), 150, 200, 300, 500, 700, 900, 1200, Inf), 
+          spacing = "constant", 
+          colorscale = "batlowK",
+          combine = TRUE, legend_title = "(mm)",
+          expand_size_y = 0.4,
+          hillshade = FALSE, rivers = FALSE, lakes = FALSE, ocean = TRUE,
+          scale = 110
+          )
+```

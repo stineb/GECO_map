@@ -1,0 +1,96 @@
+---
+title: "Simple global map"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(rgdal)  # for readOGR
+library(rnaturalearth) # for coastline data
+library(sf)
+```
+
+Here, we're plotting a simple map of the outline of continents.
+```{r}
+## Reduce extent of map in latitude
+latmin <- -60
+latmax <- 80
+lonmin <- -180
+lonmax <- 180
+
+## define domain object
+domain <- c(lonmin, lonmax, latmin, latmax)
+
+## read 110 m resolution coastline from NaturalEarth data (is a shapefile)
+coast <- rnaturalearth::ne_coastline(scale = 110, returnclass = "sf")
+
+# download and load the ocean layer and save it in a temporary destination
+dir_ne <- tempdir()
+layer_ocean <- rnaturalearth::ne_download(
+  scale = 110,
+  type = "ocean",
+  category = "physical",
+  returnclass = "sf",
+  destdir = dir_ne
+  )
+layer_ocean <- rnaturalearth::ne_load(
+  scale = 110,
+  type = "ocean",
+  category = "physical",
+  returnclass = "sf",
+  destdir = dir_ne
+  )
+
+# download global coastline data from naturalearth
+countries <- rnaturalearth::ne_countries(scale = 110, returnclass = "sf")
+
+##---------------------------------------------
+## Create ggplot object
+##---------------------------------------------
+ggplot() +
+  
+  # plot ocean
+  geom_sf(data = layer_ocean,
+		      color = NA,
+		      fill = "white") +  
+
+	# plot coastline
+  geom_sf(data = coast,
+          colour = 'black',
+          size = 0.1) +
+
+  # set extent in longitude and latitude
+  coord_sf(xlim = c(lonmin, lonmax),
+           ylim = c(latmin, latmax),
+           expand = FALSE   # to draw map strictly bounded by the specified extent
+           ) +
+  
+  # some layout modifications
+  xlab('') +
+  ylab('') +
+  theme_bw() +
+  theme(axis.ticks.y.right = element_line(),
+        axis.ticks.x.top = element_line(),
+        panel.grid = element_blank(),
+        panel.background = element_rect(fill = "grey70"),
+        plot.background = element_rect(fill = "white")
+        )
+```
+
+## Using rbeni
+
+The function `plot_map_simpl()` from the [{rbeni}](https://github.com/stineb/rbeni) package implements the steps of plotting a map described above. We can generate the map which is just a simple outline of the continents, then add points, given their longitude and latitude in degrees.
+```{r}
+rbeni::plot_map_simpl() +
+  geom_point(
+    data = data.frame(x = 7.451123, y = 46.947456), # Bern
+    aes(x, y),
+    color = "red"
+  )
+```
